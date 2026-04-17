@@ -421,7 +421,7 @@ class McpServerPlugin extends Plugin
         return ['content' => [['type' => 'text', 'text' => json_encode(['route' => $page->route(), 'title' => $page->title(), 'content' => $page->rawMarkdown(), 'header' => (array)$page->header()], JSON_PRETTY_PRINT)]]];
     }
 
-    private static $VALID_TAGS = ['crowdsec', 'nginx', 'vector', 'cloudflare', 'incident', 'sécurité', 'infrastructure', 'réseau', 'monitoring', 'homelab', 'grav', 'seo', 'indexnow'];
+    private static $VALID_TAGS = ['crowdsec', 'nginx', 'vector', 'cloudflare', 'incident', 'sécurité', 'infrastructure', 'réseau', 'monitoring', 'homelab', 'grav', 'seo', 'indexnow', 'mcp', 'claude'];
 
     private function validatePageFrontmatter(array $header): ?string
     {
@@ -442,7 +442,15 @@ class McpServerPlugin extends Plugin
         $route = $args['route'] ?? ''; $title = $args['title'] ?? 'New Page'; $content = $args['content'] ?? ''; $lang = $args['language'] ?? '';
         if ($lang !== '' && !preg_match('/^[a-z]{2,3}$/', $lang))
             return ['content' => [['type' => 'text', 'text' => "Invalid language code: $lang"]], 'isError' => true];
-        $pageDir  = $this->grav['locator']->findResource('page://') . '/' . trim($route, '/');
+        $pagesRoot = $this->grav['locator']->findResource('page://');
+        $routePath = trim($route, '/');
+        if (strpos($routePath, '/') === false) {
+            $prefix  = $this->_nextPagePrefix($pagesRoot);
+            $dirName = $prefix !== null ? $prefix . '.' . $routePath : $routePath;
+        } else {
+            $dirName = $routePath;
+        }
+        $pageDir  = $pagesRoot . '/' . $dirName;
         $filename = $lang !== '' ? "default.$lang.md" : 'default.md';
         $filePath = $pageDir . '/' . $filename;
         if (file_exists($filePath))
@@ -466,6 +474,19 @@ class McpServerPlugin extends Plugin
         $this->clearCacheFiles();
         $this->notifyPageSaved($route);
         return ['content' => [['type' => 'text', 'text' => $lang !== '' ? "Page variant created: $route (language: $lang)" : "Page created: $route"]]];
+    }
+
+
+    private function _nextPagePrefix(string $pagesRoot): ?int
+    {
+        $max = null;
+        foreach (glob($pagesRoot . '/*/') as $dir) {
+            if (preg_match('/^(\d+)\./', basename($dir), $m)) {
+                $n = (int)$m[1];
+                if ($max === null || $n > $max) $max = $n;
+            }
+        }
+        return $max !== null ? $max + 1 : null;
     }
 
     private function toolUpdatePage(array $args): array
