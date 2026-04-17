@@ -1,0 +1,29 @@
+name: MCP Server
+slug: mcp-server
+type: plugin
+version: 1.0.0
+description: Model Context Protocol (MCP) server exposing Grav CMS pages and tools to AI assistants like Claude.
+icon: robot
+author:
+  name: Jm Rohmer
+  url: https://arleo.eu
+homepage: https://github.com/jmrGrav/grav-plugin-mcp-server
+keywords: mcp, ai, claude, anthropic, model context protocol, api
+bugs: https://github.com/jmrGrav/grav-plugin-mcp-server/issues
+docs: https://github.com/jmrGrav/grav-plugin-mcp-server/blob/main/README.md
+license: MIT
+
+dependencies:
+  - { name: grav, version: '>=1.7.0' }
+
+form:
+  validation: loose
+  fields:
+    enabled:
+      type: toggle
+      label: Plugin status
+      default: 1
+    token:
+      type: text
+      label: Bearer token
+      help: Secret token for API authentication
