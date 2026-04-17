@@ -507,6 +507,13 @@ class McpServerPlugin extends Plugin
         if ($err !== null)
             return ['content' => [['type' => 'text', 'text' => $err]], 'isError' => true];
 
+        // Render raw markdown inside HTML div blocks before writing to disk
+        if (preg_match('/^(---\r?\n.*?\r?\n---\r?\n)(.*)$/s', $fileContent, $parts)) {
+            $fileContent = $parts[1] . $this->renderMarkdownContent($parts[2]);
+        } else {
+            $fileContent = $this->renderMarkdownContent($fileContent);
+        }
+
         if (!is_dir($pageDir)) mkdir($pageDir, 0755, true);
         file_put_contents($filePath, $fileContent);
         $this->clearCacheFiles();
@@ -534,16 +541,65 @@ class McpServerPlugin extends Plugin
             return ['content' => [['type' => 'text', 'text' => "Invalid language code: $lang"]], 'isError' => true];
         $page = $this->grav['pages']->find($args['route'] ?? '');
         if (!$page) return ['content' => [['type' => 'text', 'text' => 'Page not found']], 'isError' => true];
-        $filePath = $lang !== '' ? $page->path() . '/default.' . $lang . '.md' : $page->filePath();
+        // Resolve the language-variant file: prefer {template}.{lang}.md, fall back to default.{lang}.md
+        if ($lang !== '') {
+            $templateFile = $page->path() . '/' . $page->template() . '.' . $lang . '.md';
+            $defaultFile  = $page->path() . '/default.' . $lang . '.md';
+            $filePath = file_exists($templateFile) ? $templateFile : $defaultFile;
+        } else {
+            $filePath = $page->filePath();
+        }
         if ($lang !== '' && !file_exists($filePath))
             return ['content' => [['type' => 'text', 'text' => "Page variant not found: {$args['route']} (language: $lang)"]], 'isError' => true];
         $current = file_get_contents($filePath);
         if (!empty($args['title'])) $current = preg_replace('/^title:.*$/m', 'title: ' . $args['title'], $current);
-        if (isset($args['content'])) $current = preg_replace('/^---\r?\n(.*?\r?\n)---\r?\n.*/s', "---\n$1---\n\n" . $args['content'], $current);
+        if (isset($args['content'])) {
+            $newBody = $args['content'];
+            // Strip embedded frontmatter sent by the caller — prevents double-frontmatter bug
+            if (preg_match('/^---\r?\n.*?\r?\n---\r?\n(.*)$/s', $newBody, $stripped)) {
+                $newBody = $stripped[1];
+            }
+            // Render raw markdown inside HTML div blocks before writing to disk
+            $newBody = $this->renderMarkdownContent($newBody);
+            $current = preg_replace('/^---\r?\n(.*?\r?\n)---\r?\n.*/s', "---\n$1---\n\n" . $newBody, $current);
+        }
         file_put_contents($filePath, $current);
         $this->clearCacheFiles();
         $this->notifyPageSaved($args['route']);
         return ['content' => [['type' => 'text', 'text' => $lang !== '' ? "Page variant updated: {$args['route']} (language: $lang)" : 'Page updated: ' . $args['route']]]];
+    }
+
+    /**
+     * Convert raw Markdown inside HTML div blocks to HTML before writing to disk.
+     * Grav's ParsedownExtra does not process markdown="1" in this configuration.
+     * Processes ANY div whose inner content contains raw Markdown headers (## / ###)
+     * and has not already been converted to HTML.
+     */
+    private function renderMarkdownContent(string $body): string
+    {
+        return preg_replace_callback(
+            '/(<div\b[^>]*>)(.*?)(<\/div>)/si',
+            static function (array $m): string {
+                $inner = trim($m[2]);
+                if ($inner === '') return $m[0];
+                // Only process if raw markdown headers are present
+                if (!preg_match('/^#{1,6}\s/m', $inner)) return $m[0];
+                // Skip if content already contains rendered HTML block elements
+                if (preg_match('/<(?:h[1-6]|p\b|ul\b|ol\b|table\b|pre\b|blockquote\b)/i', $inner)) return $m[0];
+                // Skip nested divs — avoid mangling complex structures
+                if (stripos($inner, '<div') !== false) return $m[0];
+                try {
+                    $pd = new \ParsedownExtra();
+                    $html = $pd->text($inner);
+                    // Strip markdown="1" from the opening tag (now redundant)
+                    $openTag = preg_replace('/\s+markdown="1"/', '', $m[1]);
+                    return $openTag . "\n" . $html . "\n" . $m[3];
+                } catch (\Throwable $e) {
+                    return $m[0]; // pass through unchanged on any error
+                }
+            },
+            $body
+        );
     }
 
     private function toolDeletePage(array $args): array
