@@ -636,10 +636,9 @@ class McpServerPlugin extends Plugin
                 if ($inner === '') return $m[0];
                 // Only process if raw markdown headers are present
                 if (!preg_match('/^#{1,6}\s/m', $inner)) return $m[0];
-                // Skip if content already contains rendered HTML block elements
-                if (preg_match('/<(?:h[1-6]|p\b|ul\b|ol\b|table\b|pre\b|blockquote\b)/i', $inner)) return $m[0];
                 // Skip nested divs — avoid mangling complex structures
                 if (stripos($inner, '<div') !== false) return $m[0];
+                // ParsedownExtra handles mixed HTML+markdown: passes HTML through, converts markdown
                 try {
                     $pd = new \ParsedownExtra();
                     $html = $pd->text($inner);
