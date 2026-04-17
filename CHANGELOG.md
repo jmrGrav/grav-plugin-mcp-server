@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.1
+### 17-04-2026
+* Add default mcp-server.yaml for GPM compliance (defaults only, no secrets)
+* Remove mcp-server.yaml from .gitignore — user override goes in user/config/plugins/
+
 ## v1.1.0
 ### 17-04-2026
 * Add API key authentication mode (simple, no proxy required)
