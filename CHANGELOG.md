@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.0
+### 17-04-2026
+* Add API key authentication mode (simple, no proxy required)
+* Add auth_mode config option (api_key / oauth)
+* api_key mode supports Authorization: Bearer and X-API-Key headers
+* Warns in grav.log if api_key mode is active but no key is configured
+* OAuth mode unchanged — fully compatible with mcp-oauth-proxy
+
 ## v1.0.0
 ### 17-04-2026
 * Initial release

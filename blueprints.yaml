@@ -1,7 +1,7 @@
 name: MCP Server
 slug: mcp-server
 type: plugin
-version: 1.0.0
+version: 1.1.0
 description: Model Context Protocol (MCP) server exposing Grav CMS pages and tools to AI assistants like Claude.
 icon: robot
 author:
@@ -23,7 +23,30 @@ form:
       type: toggle
       label: Plugin status
       default: 1
+    auth_mode:
+      type: select
+      label: "Mode d'authentification"
+      help: "api_key pour usage simple, oauth pour production avec Claude.ai"
+      default: api_key
+      options:
+        api_key: "API Key (simple, recommandé pour démarrer)"
+        oauth: "OAuth 2.1 (production — nécessite mcp-oauth-proxy)"
+
+    api_key:
+      type: text
+      label: "API Key"
+      help: "Clé secrète pour le mode API Key (min. 32 caractères)."
+      placeholder: "Entrer une clé secrète d'au moins 32 caractères"
+      toggleable: true
+      validate:
+        min: 32
+
+    oauth_info:
+      type: display
+      label: "Mode OAuth"
+      content: "Le mode OAuth nécessite le proxy [mcp-oauth-proxy](https://github.com/jmrGrav/mcp-oauth-proxy) et une configuration nginx. Voir la documentation complète sur [arleo.eu](https://arleo.eu/fr/grav-mcp-server)."
+
     token:
       type: text
-      label: Bearer token
-      help: Secret token for API authentication
+      label: Bearer token (mode OAuth)
+      help: Token vérifié par le plugin en mode OAuth (transmis par mcp-oauth-proxy)

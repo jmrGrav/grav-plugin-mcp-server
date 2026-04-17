@@ -57,19 +57,13 @@ class McpServerPlugin extends Plugin
             exit;
         }
 
-        $token     = $this->config->get('plugins.mcp-server.token', '');
-        $auth      = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
         $bodyRaw   = file_get_contents('php://input');
         $body      = json_decode($bodyRaw, true) ?? [];
         $mcpMethod = $body['method'] ?? '';
 
         $noAuthMethods = ['initialize', 'notifications/initialized', 'tools/list'];
-        if (!in_array($mcpMethod, $noAuthMethods)) {
-            if (!$token || $auth !== 'Bearer ' . $token) {
-                http_response_code(401);
-                echo json_encode(['jsonrpc' => '2.0', 'error' => ['code' => -32001, 'message' => 'Unauthorized'], 'id' => $body['id'] ?? null]);
-                exit;
-            }
+        if (!in_array($mcpMethod, $noAuthMethods) && !$this->authenticateRequest($body['id'] ?? null)) {
+            exit;
         }
 
         $sessionId = $_SERVER['HTTP_MCP_SESSION_ID'] ?? bin2hex(random_bytes(16));
@@ -97,6 +91,50 @@ class McpServerPlugin extends Plugin
                 $this->rpcError($id, -32601, 'Method not found: ' . $mcpMethod);
         }
         exit;
+    }
+
+    private function authenticateRequest($requestId): bool
+    {
+        $authMode = $this->config->get('plugins.mcp-server.auth_mode', 'api_key');
+        if ($authMode === 'oauth') {
+            return $this->authenticateOAuth($requestId);
+        }
+        return $this->authenticateApiKey($requestId);
+    }
+
+    private function authenticateApiKey($requestId): bool
+    {
+        $apiKey = $this->config->get('plugins.mcp-server.api_key', '');
+        if (empty($apiKey)) {
+            $this->grav['log']->warning('[MCP Server] api_key is not configured. Set a secret key in Grav Admin â Plugins â MCP Server.');
+            http_response_code(401);
+            echo json_encode(['jsonrpc' => '2.0', 'error' => ['code' => -32001, 'message' => 'API key not configured'], 'id' => $requestId]);
+            return false;
+        }
+        $headers = getallheaders();
+        if (isset($headers['Authorization'])) {
+            $bearer = (strncasecmp($headers['Authorization'], 'Bearer ', 7) === 0)
+                ? substr($headers['Authorization'], 7) : '';
+            if ($bearer !== '' && hash_equals($apiKey, $bearer)) return true;
+        }
+        if (isset($headers['X-API-Key']) && hash_equals($apiKey, $headers['X-API-Key'])) {
+            return true;
+        }
+        http_response_code(401);
+        echo json_encode(['jsonrpc' => '2.0', 'error' => ['code' => -32001, 'message' => 'Invalid API key'], 'id' => $requestId]);
+        return false;
+    }
+
+    private function authenticateOAuth($requestId): bool
+    {
+        $token = $this->config->get('plugins.mcp-server.token', '');
+        $auth  = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+        if (!$token || $auth !== 'Bearer ' . $token) {
+            http_response_code(401);
+            echo json_encode(['jsonrpc' => '2.0', 'error' => ['code' => -32001, 'message' => 'Unauthorized'], 'id' => $requestId]);
+            return false;
+        }
+        return true;
     }
 
     private function rpcResponse($id, array $result): void
