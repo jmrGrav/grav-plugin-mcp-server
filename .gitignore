@@ -4,7 +4,6 @@ vendor/
 # Plugin config (may contain secrets)
 indexnow.yaml
 google-indexing.yaml
-mcp-server.yaml
 csp-nonce.yaml
 cachepurge.yaml
 # Backup files

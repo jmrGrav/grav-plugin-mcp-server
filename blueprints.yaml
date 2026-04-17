@@ -1,7 +1,7 @@
 name: MCP Server
 slug: mcp-server
 type: plugin
-version: 1.1.0
+version: 1.1.1
 description: Model Context Protocol (MCP) server exposing Grav CMS pages and tools to AI assistants like Claude.
 icon: robot
 author:
