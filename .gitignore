@@ -10,3 +10,9 @@ cachepurge.yaml
 # Backup files
 *.bak*
 *.bak-*
+# Additional security patterns
+secrets.env
+*.env
+*.key
+*.pem
+config/secrets*
