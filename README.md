@@ -2,6 +2,13 @@
 
 > Grav CMS plugin — Model Context Protocol (MCP) server exposing Grav CMS pages and tools to AI assistants like Claude.
 
+## Prerequisites
+
+Direct use of this plugin requires a Bearer token for every request.
+To connect **Claude.ai** (or any OAuth 2.1 MCP client), you need the companion proxy:
+
+**[jmrGrav/mcp-oauth-proxy](https://github.com/jmrGrav/mcp-oauth-proxy)** — FastAPI OAuth 2.1 proxy that handles authentication and forwards requests to this plugin.
+
 ## Installation
 
 ```bash
@@ -31,7 +38,7 @@ Then enable the plugin and configure a bearer token in Grav Admin → Plugins �
 
 | Event | Description |
 |-------|-------------|
-| `onPluginsInitialized` | Registers the MCP HTTP endpoint |
+| `onPluginsInitialized` | Registers the MCP HTTP endpoint at `/api/mcp` |
 
 ## License
 
