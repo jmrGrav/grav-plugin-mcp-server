@@ -459,7 +459,7 @@ class McpServerPlugin extends Plugin
         return ['content' => [['type' => 'text', 'text' => json_encode(['route' => $page->route(), 'title' => $page->title(), 'content' => $page->rawMarkdown(), 'header' => (array)$page->header()], JSON_PRETTY_PRINT)]]];
     }
 
-    private static $VALID_TAGS = ['crowdsec', 'nginx', 'vector', 'cloudflare', 'incident', 'sécurité', 'infrastructure', 'réseau', 'monitoring', 'homelab', 'grav', 'seo', 'indexnow', 'mcp', 'claude'];
+    private static $VALID_TAGS = ['crowdsec', 'nginx', 'vector', 'cloudflare', 'incident', 'sécurité', 'infrastructure', 'réseau', 'monitoring', 'homelab', 'grav', 'seo', 'indexnow', 'mcp', 'claude', 'javascript'];
 
     private function validatePageFrontmatter(array $header): ?string
     {
@@ -506,6 +506,8 @@ class McpServerPlugin extends Plugin
         $err = $this->validatePageFrontmatter($header);
         if ($err !== null)
             return ['content' => [['type' => 'text', 'text' => $err]], 'isError' => true];
+
+        $this->ensureTagPagesExist((array)($header['taxonomy']['tag'] ?? []));
 
         // Render raw markdown inside HTML div blocks before writing to disk
         if (preg_match('/^(---\r?\n.*?\r?\n---\r?\n)(.*)$/s', $fileContent, $parts)) {
@@ -554,6 +556,12 @@ class McpServerPlugin extends Plugin
         $current = file_get_contents($filePath);
         if (!empty($args['title'])) $current = preg_replace('/^title:.*$/m', 'title: ' . $args['title'], $current);
         if (isset($args['content'])) {
+            // Extract tags from incoming content and ensure their tag pages exist
+            $newBody = $args['content'];
+            if (preg_match('/^---\r?\n(.*?)\r?\n---\r?\n/s', $newBody, $fmMatch)) {
+                $fmHeader = \Grav\Common\Yaml::parse($fmMatch[1]) ?: [];
+                $this->ensureTagPagesExist((array)($fmHeader['taxonomy']['tag'] ?? []));
+            }
             $newBody = $args['content'];
             // Strip embedded frontmatter sent by the caller — prevents double-frontmatter bug
             if (preg_match('/^---\r?\n.*?\r?\n---\r?\n(.*)$/s', $newBody, $stripped)) {
@@ -567,6 +575,50 @@ class McpServerPlugin extends Plugin
         $this->clearCacheFiles();
         $this->notifyPageSaved($args['route']);
         return ['content' => [['type' => 'text', 'text' => $lang !== '' ? "Page variant updated: {$args['route']} (language: $lang)" : 'Page updated: ' . $args['route']]]];
+    }
+
+    private function ensureTagPagesExist(array $tags): void
+    {
+        $tagsDir = '/var/www/grav/user/pages/12.tag';
+
+        $maxPrefix = 0;
+        foreach (glob("$tagsDir/*/") as $dir) {
+            $name = basename($dir);
+            if (preg_match('/^(\d+)\./', $name, $m)) {
+                $maxPrefix = max($maxPrefix, (int)$m[1]);
+            }
+        }
+
+        foreach ($tags as $tag) {
+            $exists = false;
+            foreach (glob("$tagsDir/*/") as $dir) {
+                $base = basename($dir);
+                if ($base === $tag || preg_match('/^\d+\.' . preg_quote($tag, '/') . '$/', $base)) {
+                    $exists = true;
+                    break;
+                }
+            }
+
+            if (!$exists) {
+                $maxPrefix++;
+                $tagDir = "$tagsDir/$maxPrefix.$tag";
+                mkdir($tagDir, 0755, true);
+                chown($tagDir, 'www-data');
+
+                $content = "---\ntitle: '$tag'\nslug: $tag\n" .
+                           "visible: false\nroutable: true\n" .
+                           "template: tag\nsitemap:\n" .
+                           "    ignore: true\n---\n";
+                file_put_contents("$tagDir/default.md", $content);
+                chown("$tagDir/default.md", 'www-data');
+
+                if (!in_array($tag, self::$VALID_TAGS, true)) {
+                    self::$VALID_TAGS[] = $tag;
+                }
+
+                $this->grav['log']->info("[MCP Server] Tag page created: $tag → $tagDir");
+            }
+        }
     }
 
     /**
