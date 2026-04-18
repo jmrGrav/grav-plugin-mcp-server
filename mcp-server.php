@@ -634,8 +634,12 @@ class McpServerPlugin extends Plugin
             static function (array $m): string {
                 $inner = trim($m[2]);
                 if ($inner === '') return $m[0];
-                // Only process if raw markdown headers are present
-                if (!preg_match('/^#{1,6}\s/m', $inner)) return $m[0];
+                // Process if any raw markdown syntax is present
+                $hasMarkdown = preg_match('/^#{1,6}\s/m', $inner)
+                             || preg_match('/\[.+?\]\(.+?\)/', $inner)
+                             || preg_match('/^\s*[-*]\s/m', $inner)
+                             || preg_match('/^\s*\d+\.\s/m', $inner);
+                if (!$hasMarkdown) return $m[0];
                 // Skip nested divs — avoid mangling complex structures
                 if (stripos($inner, '<div') !== false) return $m[0];
                 // ParsedownExtra handles mixed HTML+markdown: passes HTML through, converts markdown
