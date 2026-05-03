@@ -483,8 +483,20 @@ class McpServerPlugin extends Plugin
         $pagesRoot = $this->grav['locator']->findResource('page://');
         $routePath = trim($route, '/');
         if (strpos($routePath, '/') === false) {
-            $prefix  = $this->_nextPagePrefix($pagesRoot);
-            $dirName = $prefix !== null ? $prefix . '.' . $routePath : $routePath;
+            $existingDir = null;
+            foreach (glob($pagesRoot . '/*/') as $dir) {
+                $base = basename($dir);
+                if ($base === $routePath || preg_match('/^\d+\.' . preg_quote($routePath, '/') . '$/', $base)) {
+                    $existingDir = $base;
+                    break;
+                }
+            }
+            if ($existingDir !== null) {
+                $dirName = $existingDir;
+            } else {
+                $prefix  = $this->_nextPagePrefix($pagesRoot);
+                $dirName = $prefix !== null ? $prefix . '.' . $routePath : $routePath;
+            }
         } else {
             $dirName = $routePath;
         }
