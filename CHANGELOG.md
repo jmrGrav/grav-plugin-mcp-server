@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.2.0
+### 07-05-2026
+* `get_page`, `create_page`, `update_page` : rename schema param `language` → `lang` to match Claude.ai argument serialization
+* Accept both `lang` and `language` arg keys for backward compat (legacy `language` key still works)
+* `get_page` : try `{template}.{lang}.md` before `default.{lang}.md` — fixes pages using item/blog template names (item.en.md, blog.en.md, etc.)
+* `list_pages` : detect language variants from any `*.{lang}.md` file, not only `default.*.md` — pages with item/blog templates now report correct `languages` array
+
 ## v1.1.1
 ### 17-04-2026
 * Add default mcp-server.yaml for GPM compliance (defaults only, no secrets)

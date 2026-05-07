@@ -163,28 +163,28 @@ class McpServerPlugin extends Plugin
             ['name' => 'get_page', 'title' => 'Get page',
              'description' => 'Retrieve a Grav page by its route, optionally for a specific language variant',
              'inputSchema' => ['type' => 'object', 'properties' => [
-                 'route'    => ['type' => 'string', 'description' => 'Page route, e.g. /blog/my-article'],
-                 'language' => ['type' => 'string', 'description' => "Optional language code (e.g. 'en', 'fr'). Empty for default version (default.md)."],
+                 'route' => ['type' => 'string', 'description' => 'Page route, e.g. /blog/my-article'],
+                 'lang'  => ['type' => 'string', 'description' => "Optional language code (e.g. 'en', 'fr'). Omit for default language (fr)."],
              ], 'required' => ['route']],
              'annotations' => ['title' => 'Get page', 'readOnlyHint' => true, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false]],
 
             ['name' => 'create_page', 'title' => 'Create page',
              'description' => 'Create a new Grav page at the given route with title and Markdown content, optionally as a language variant',
              'inputSchema' => ['type' => 'object', 'properties' => [
-                 'route'    => ['type' => 'string', 'description' => 'New page route, e.g. /blog/new-article'],
-                 'title'    => ['type' => 'string', 'description' => 'Page title'],
-                 'content'  => ['type' => 'string', 'description' => 'Markdown content of the page'],
-                 'language' => ['type' => 'string', 'description' => "Optional language code (e.g. 'en', 'fr'). Empty for default version (default.md)."],
+                 'route'   => ['type' => 'string', 'description' => 'New page route, e.g. /blog/new-article'],
+                 'title'   => ['type' => 'string', 'description' => 'Page title'],
+                 'content' => ['type' => 'string', 'description' => 'Markdown content of the page'],
+                 'lang'    => ['type' => 'string', 'description' => "Optional language code (e.g. 'en', 'fr'). Omit for default version (default.md)."],
              ], 'required' => ['route', 'title', 'content']],
              'annotations' => ['title' => 'Create page', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false]],
 
             ['name' => 'update_page', 'title' => 'Update page',
              'description' => 'Update an existing Grav page content and/or title, optionally targeting a language variant',
              'inputSchema' => ['type' => 'object', 'properties' => [
-                 'route'    => ['type' => 'string', 'description' => 'Existing page route'],
-                 'content'  => ['type' => 'string', 'description' => 'New Markdown content'],
-                 'title'    => ['type' => 'string', 'description' => 'New page title'],
-                 'language' => ['type' => 'string', 'description' => "Optional language code (e.g. 'en', 'fr'). Empty for default version (default.md)."],
+                 'route'   => ['type' => 'string', 'description' => 'Existing page route'],
+                 'content' => ['type' => 'string', 'description' => 'New Markdown content'],
+                 'title'   => ['type' => 'string', 'description' => 'New page title'],
+                 'lang'    => ['type' => 'string', 'description' => "Optional language code (e.g. 'en', 'fr'). Omit for default version (default.md)."],
              ], 'required' => ['route']],
              'annotations' => ['title' => 'Update page', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false]],
 
@@ -426,11 +426,15 @@ class McpServerPlugin extends Plugin
         $result = [];
         foreach ($pages as $page) {
             $pageDir   = $page->path();
-            $languages = [];
-            if (file_exists($pageDir . '/default.md')) $languages[] = '';
-            foreach (glob($pageDir . '/default.*.md') ?: [] as $f) {
-                if (preg_match('/default\.([a-z]{2,3})\.md$/', basename($f), $m)) $languages[] = $m[1];
+            $langSet   = [];
+            // Detect any {template}.{lang}.md file (item.en.md, default.fr.md, blog.en.md, etc.)
+            foreach (glob($pageDir . '/*.md') ?: [] as $f) {
+                $stem = basename($f, '.md'); // e.g. "default.fr", "item.en"
+                if (preg_match('/^.+\.([a-z]{2,3})$/', $stem, $m)) {
+                    $langSet[$m[1]] = true;
+                }
             }
+            $languages = array_keys($langSet);
             sort($languages);
             $result[] = ['route' => $page->route(), 'title' => $page->title(), 'published' => $page->published(), 'path' => $page->filePath(), 'languages' => $languages];
         }
@@ -439,22 +443,31 @@ class McpServerPlugin extends Plugin
 
     private function toolGetPage(array $args): array
     {
-        $lang = $args['language'] ?? '';
+        // Accept both 'lang' (preferred) and 'language' (legacy) parameter names
+        $lang = $args['lang'] ?? $args['language'] ?? '';
         if ($lang !== '' && !preg_match('/^[a-z]{2,3}$/', $lang))
             return ['content' => [['type' => 'text', 'text' => "Invalid language code: $lang"]], 'isError' => true];
         $page = $this->grav['pages']->find($args['route'] ?? '');
         if (!$page) return ['content' => [['type' => 'text', 'text' => 'Page not found']], 'isError' => true];
         if ($lang !== '') {
-            $filePath = $page->path() . '/default.' . $lang . '.md';
-            if (!file_exists($filePath))
-                return ['content' => [['type' => 'text', 'text' => "Page variant not found: {$args['route']} (language: $lang)"]], 'isError' => true];
+            // Try {template}.{lang}.md first (item.en.md, blog.en.md, etc.), then default.{lang}.md
+            $candidates = [
+                $page->path() . '/' . $page->template() . '.' . $lang . '.md',
+                $page->path() . '/default.' . $lang . '.md',
+            ];
+            $filePath = null;
+            foreach ($candidates as $c) {
+                if (file_exists($c)) { $filePath = $c; break; }
+            }
+            if ($filePath === null)
+                return ['content' => [['type' => 'text', 'text' => "Page variant not found: {$args['route']} (lang: $lang)"]], 'isError' => true];
             $raw = file_get_contents($filePath);
             $header = []; $content = $raw;
             if (preg_match('/^---\r?\n(.*?)\r?\n---\r?\n(.*)/s', $raw, $m)) {
                 $header = \Grav\Common\Yaml::parse($m[1]) ?: [];
                 $content = ltrim($m[2]);
             }
-            return ['content' => [['type' => 'text', 'text' => json_encode(['route' => $page->route(), 'language' => $lang, 'title' => $header['title'] ?? '', 'content' => $content, 'header' => $header], JSON_PRETTY_PRINT)]]];
+            return ['content' => [['type' => 'text', 'text' => json_encode(['route' => $page->route(), 'lang' => $lang, 'title' => $header['title'] ?? '', 'content' => $content, 'header' => $header], JSON_PRETTY_PRINT)]]];
         }
         return ['content' => [['type' => 'text', 'text' => json_encode(['route' => $page->route(), 'title' => $page->title(), 'content' => $page->rawMarkdown(), 'header' => (array)$page->header()], JSON_PRETTY_PRINT)]]];
     }
@@ -477,7 +490,7 @@ class McpServerPlugin extends Plugin
 
     private function toolCreatePage(array $args): array
     {
-        $route = $args['route'] ?? ''; $title = $args['title'] ?? 'New Page'; $content = $args['content'] ?? ''; $lang = $args['language'] ?? '';
+        $route = $args['route'] ?? ''; $title = $args['title'] ?? 'New Page'; $content = $args['content'] ?? ''; $lang = $args['lang'] ?? $args['language'] ?? '';
         if ($lang !== '' && !preg_match('/^[a-z]{2,3}$/', $lang))
             return ['content' => [['type' => 'text', 'text' => "Invalid language code: $lang"]], 'isError' => true];
         $pagesRoot = $this->grav['locator']->findResource('page://');
@@ -550,7 +563,7 @@ class McpServerPlugin extends Plugin
 
     private function toolUpdatePage(array $args): array
     {
-        $lang = $args['language'] ?? '';
+        $lang = $args['lang'] ?? $args['language'] ?? '';
         if ($lang !== '' && !preg_match('/^[a-z]{2,3}$/', $lang))
             return ['content' => [['type' => 'text', 'text' => "Invalid language code: $lang"]], 'isError' => true];
         $page = $this->grav['pages']->find($args['route'] ?? '');
