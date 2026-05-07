@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.4.0
+### 07-05-2026
+* **G-03 MEDIUM** : mode strict auth optionnel — nouvelle config `strict_auth_on_initialize` (défaut OFF) ; si ON, toutes les méthodes MCP (y compris `initialize`/`tools/list`) exigent un token valide (⚠️ casse la compat MCP standard)
+* Blueprints mis à jour pour exposer le toggle dans l'interface admin Grav
+
 ## v1.3.0
 ### 07-05-2026
 * **G-01 CRITICAL** : `_safe_route_path()` — bloque les segments `..` et `.` dans le paramètre `route` de `toolCreatePage`; RuntimeException converti en `isError: true` HTTP 400

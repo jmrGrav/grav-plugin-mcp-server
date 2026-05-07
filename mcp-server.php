@@ -61,7 +61,8 @@ class McpServerPlugin extends Plugin
         $body      = json_decode($bodyRaw, true) ?? [];
         $mcpMethod = $body['method'] ?? '';
 
-        $noAuthMethods = ['initialize', 'notifications/initialized', 'tools/list'];
+        $strictAuth    = (bool)$this->config->get('plugins.mcp-server.strict_auth_on_initialize', false);
+        $noAuthMethods = $strictAuth ? [] : ['initialize', 'notifications/initialized', 'tools/list'];
         if (!in_array($mcpMethod, $noAuthMethods) && !$this->authenticateRequest($body['id'] ?? null)) {
             exit;
         }

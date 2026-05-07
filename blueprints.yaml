@@ -50,3 +50,11 @@ form:
       type: text
       label: Bearer token (mode OAuth)
       help: Token vérifié par le plugin en mode OAuth (transmis par mcp-oauth-proxy)
+    strict_auth_on_initialize:
+      type: toggle
+      label: "Auth stricte sur initialize/tools/list"
+      help: "Si activé, toutes les méthodes MCP exigent un token (casse la compatibilité MCP standard avec Claude.ai — laisser OFF)"
+      default: 0
+      options:
+        1: Activé
+        0: Désactivé
