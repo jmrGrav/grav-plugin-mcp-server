@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.3.0
+### 07-05-2026
+* **G-01 CRITICAL** : `_safe_route_path()` — bloque les segments `..` et `.` dans le paramètre `route` de `toolCreatePage`; RuntimeException converti en `isError: true` HTTP 400
+* **G-02 HIGH** : `toolDeletePage` — suppression sélective par langue avec paramètre `lang` optionnel; supprime uniquement le fichier de la variante ciblée, supprime le dossier seulement si plus aucun fichier `.md` ne subsiste
+* Schéma JSON-RPC du tool `delete_page` mis à jour pour déclarer le paramètre `lang`
+
 ## v1.2.0
 ### 07-05-2026
 * `get_page`, `create_page`, `update_page` : rename schema param `language` → `lang` to match Claude.ai argument serialization

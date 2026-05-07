@@ -189,8 +189,12 @@ class McpServerPlugin extends Plugin
              'annotations' => ['title' => 'Update page', 'readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false]],
 
             ['name' => 'delete_page', 'title' => 'Delete page',
-             'description' => 'Permanently delete a Grav page by its route',
-             'inputSchema' => ['type' => 'object', 'properties' => ['route' => ['type' => 'string', 'description' => 'Route of the page to delete']], 'required' => ['route']],
+             'description' => 'Permanently delete a Grav page (or a single language variant) by its route',
+             'inputSchema' => ['type' => 'object', 'properties' => [
+                 'route' => ['type' => 'string', 'description' => 'Route of the page to delete'],
+                 'lang'  => ['type' => 'string', 'pattern' => '^[a-z]{2,3}$',
+                             'description' => 'Optional language code. If provided, deletes only this variant; deletes the folder only when no variants remain.'],
+             ], 'required' => ['route']],
              'annotations' => ['title' => 'Delete page', 'readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => true, 'openWorldHint' => false]],
 
             ['name' => 'clear_cache', 'title' => 'Clear Grav cache',
@@ -494,7 +498,11 @@ class McpServerPlugin extends Plugin
         if ($lang !== '' && !preg_match('/^[a-z]{2,3}$/', $lang))
             return ['content' => [['type' => 'text', 'text' => "Invalid language code: $lang"]], 'isError' => true];
         $pagesRoot = $this->grav['locator']->findResource('page://');
-        $routePath = trim($route, '/');
+        try {
+            $routePath = $this->_safe_route_path($route, $pagesRoot);
+        } catch (\RuntimeException $e) {
+            return ['content' => [['type' => 'text', 'text' => $e->getMessage()]], 'isError' => true];
+        }
         if (strpos($routePath, '/') === false) {
             $existingDir = null;
             foreach (glob($pagesRoot . '/*/') as $dir) {
@@ -548,6 +556,24 @@ class McpServerPlugin extends Plugin
         return ['content' => [['type' => 'text', 'text' => $lang !== '' ? "Page variant created: $route (language: $lang)" : "Page created: $route"]]];
     }
 
+
+    private function _safe_route_path(string $route, string $pagesRoot): string
+    {
+        $clean = trim($route, '/');
+        if ($clean === '') {
+            throw new \RuntimeException("Empty route");
+        }
+        foreach (explode('/', $clean) as $segment) {
+            if ($segment === '..' || $segment === '.') {
+                throw new \RuntimeException("Invalid route (path traversal): $route");
+            }
+        }
+        $realRoot = realpath($pagesRoot);
+        if ($realRoot === false) {
+            throw new \RuntimeException("Pages root inaccessible");
+        }
+        return $clean;
+    }
 
     private function _nextPagePrefix(string $pagesRoot): ?int
     {
@@ -684,11 +710,45 @@ class McpServerPlugin extends Plugin
 
     private function toolDeletePage(array $args): array
     {
-        $page = $this->grav['pages']->find($args['route'] ?? '');
+        $route = $args['route'] ?? '';
+        $lang  = $args['lang']  ?? '';
+
+        if ($lang !== '' && !preg_match('/^[a-z]{2,3}$/', $lang))
+            return ['content' => [['type' => 'text', 'text' => "Invalid lang: $lang"]], 'isError' => true];
+
+        $page = $this->grav['pages']->find($route);
         if (!$page) return ['content' => [['type' => 'text', 'text' => 'Page not found']], 'isError' => true];
+
+        if ($lang !== '') {
+            $template   = $page->template();
+            $candidates = [
+                $page->path() . '/' . $template . '.' . $lang . '.md',
+                $page->path() . '/default.' . $lang . '.md',
+            ];
+            $deleted = false;
+            foreach ($candidates as $f) {
+                if (file_exists($f)) {
+                    unlink($f);
+                    $deleted = true;
+                    break;
+                }
+            }
+            if (!$deleted)
+                return ['content' => [['type' => 'text', 'text' => "Variant not found: $lang"]], 'isError' => true];
+
+            $remaining = glob($page->path() . '/*.md') ?: [];
+            if (count($remaining) === 0) {
+                \Grav\Common\Filesystem\Folder::delete($page->path());
+                $this->clearCacheFiles();
+                return ['content' => [['type' => 'text', 'text' => "Deleted variant '$lang' and empty folder for: $route"]]];
+            }
+            $this->clearCacheFiles();
+            return ['content' => [['type' => 'text', 'text' => "Deleted variant '$lang' for: $route (other variants kept)"]]];
+        }
+
         \Grav\Common\Filesystem\Folder::delete($page->path());
         $this->clearCacheFiles();
-        return ['content' => [['type' => 'text', 'text' => 'Page deleted: ' . $args['route']]]];
+        return ['content' => [['type' => 'text', 'text' => 'Page deleted: ' . $route]]];
     }
 
     private function toolClearCache(): array
