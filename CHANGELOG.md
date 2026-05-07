@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.0
+### 07-05-2026
+* **G-04 LOW** : `logAudit()` — trace des opérations write (`create_page`, `update_page`, `delete_page`) via `error_log` → PHP/Apache logs ; champs `action`, `route`, `lang`, `ip`
+* **G-05 LOW** : `authenticateOAuth()` — comparaison du token via `hash_equals()` (constant-time) pour éviter les timing attacks
+
 ## v1.4.0
 ### 07-05-2026
 * **G-03 MEDIUM** : mode strict auth optionnel — nouvelle config `strict_auth_on_initialize` (défaut OFF) ; si ON, toutes les méthodes MCP (y compris `initialize`/`tools/list`) exigent un token valide (⚠️ casse la compat MCP standard)

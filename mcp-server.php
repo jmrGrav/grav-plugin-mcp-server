@@ -130,7 +130,7 @@ class McpServerPlugin extends Plugin
     {
         $token = $this->config->get('plugins.mcp-server.token', '');
         $auth  = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-        if (!$token || $auth !== 'Bearer ' . $token) {
+        if (!$token || !hash_equals('Bearer ' . $token, $auth ?? '')) {
             http_response_code(401);
             echo json_encode(['jsonrpc' => '2.0', 'error' => ['code' => -32001, 'message' => 'Unauthorized'], 'id' => $requestId]);
             return false;
@@ -146,6 +146,12 @@ class McpServerPlugin extends Plugin
     private function rpcError($id, int $code, string $message): void
     {
         echo json_encode(['jsonrpc' => '2.0', 'id' => $id, 'error' => ['code' => $code, 'message' => $message]]);
+    }
+
+    private function logAudit(string $action, string $route = '-', string $lang = '-'): void
+    {
+        $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        error_log(sprintf('[grav-mcp.audit] action=%s route=%s lang=%s ip=%s', $action, $route, $lang, $ip));
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -383,9 +389,9 @@ class McpServerPlugin extends Plugin
             // Grav
             case 'list_pages':    return $this->toolListPages();
             case 'get_page':      return $this->toolGetPage($args);
-            case 'create_page':   return $this->toolCreatePage($args);
-            case 'update_page':   return $this->toolUpdatePage($args);
-            case 'delete_page':   return $this->toolDeletePage($args);
+            case 'create_page':   $this->logAudit('create_page', $args['route'] ?? '-', $args['lang'] ?? '-'); return $this->toolCreatePage($args);
+            case 'update_page':   $this->logAudit('update_page', $args['route'] ?? '-', $args['lang'] ?? '-'); return $this->toolUpdatePage($args);
+            case 'delete_page':   $this->logAudit('delete_page', $args['route'] ?? '-', $args['lang'] ?? '-'); return $this->toolDeletePage($args);
             case 'clear_cache':   return $this->toolClearCache();
             case 'list_plugins':  return $this->toolListPlugins();
             case 'list_themes':   return $this->toolListThemes();
